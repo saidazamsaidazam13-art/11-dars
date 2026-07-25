@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ilon o'yini</title>
+<style>
+  :root{
+    --bg:#0f1115;
+    --board:#171a21;
+    --snake:#4ade80;
+    --food:#ff4d4d;
+    --text:#e8e8ec;
+    --muted:#7a7f8a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Segoe UI',system-ui,sans-serif;
+    min-height:100vh;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:16px;
+    padding:20px;
+  }
+  h1{font-size:22px;font-weight:600;letter-spacing:0.02em;}
+  #scoreboard{
+    display:flex;gap:24px;font-size:15px;color:var(--muted);
+  }
+  #scoreboard span{color:var(--text);font-weight:600;}
+  canvas{
+    background:var(--board);
+    border-radius:8px;
+    box-shadow:0 0 0 1px rgba(255,255,255,0.06);
+    touch-action:none;
+  }
+  #msg{
+    min-height:24px;
+    font-size:14px;
+    color:var(--muted);
+  }
+  #restart{
+    display:none;
+    background:var(--snake);
+    color:#0f1115;
+    border:none;
+    padding:10px 22px;
+    border-radius:6px;
+    font-weight:600;
+    font-size:14px;
+    cursor:pointer;
+  }
+  #controls{
+    display:none;
+    grid-template-columns:repeat(3,52px);
+    grid-template-rows:repeat(2,52px);
+    gap:6px;
+    margin-top:4px;
+  }
+  #controls button{
+    background:#20242c;
+    border:1px solid rgba(255,255,255,0.08);
+    color:var(--text);
+    border-radius:8px;
+    font-size:18px;
+    cursor:pointer;
+  }
+  #up{grid-column:2;grid-row:1;}
+  #left{grid-column:1;grid-row:2;}
+  #down{grid-column:2;grid-row:2;}
+  #right{grid-column:3;grid-row:2;}
+
+  @media (max-width:600px){
+    #controls{display:grid;}
+  }
+</style>
+</head>
+<body>
+
+<h1>🐍 Ilon o'yini</h1>
+<div id="scoreboard">
+  <div>Ochko: <span id="score">0</span></div>
+  <div>Rekord: <span id="best">0</span></div>
+</div>
+<canvas id="game" width="400" height="400"></canvas>
+<div id="msg">Boshlash uchun tugmani bosing yoki strelka tugmalarini ishlating</div>
+<button id="restart">Qayta boshlash</button>
+<div id="controls">
+  <button id="up">↑</button>
+  <button id="left">←</button>
+  <button id="down">↓</button>
+  <button id="right">→</button>
+</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const cell = 20;
+const cols = canvas.width / cell;
+const rows = canvas.height / cell;
+
+const scoreEl = document.getElementById('score');
+const bestEl = document.getElementById('best');
+const msgEl = document.getElementById('msg');
+const restartBtn = document.getElementById('restart');
+
+let snake, dir, nextDir, food, score, best, gameOver, running, loopId;
+
+best = Number(localStorage.getItem('snakeBest') || 0);
+bestEl.textContent = best;
+
+function init(){
+  snake = [{x:8,y:10},{x:7,y:10},{x:6,y:10}];
+  dir = {x:1,y:0};
+  nextDir = {x:1,y:0};
+  score = 0;
+  gameOver = false;
+  running = false;
+  scoreEl.textContent = score;
+  msgEl.textContent = "Boshlash uchun strelka tugmasini bosing";
+  restartBtn.style.display = 'none';
+  placeFood();
+  draw();
+}
+
+function placeFood(){
+  let ok = false;
+  while(!ok){
+    food = {x: Math.floor(Math.random()*cols), y: Math.floor(Math.random()*rows)};
+    ok = !snake.some(s => s.x === food.x && s.y === food.y);
+  }
+}
+
+function draw(){
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--board');
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--food');
+  roundRect(food.x*cell+2, food.y*cell+2, cell-4, cell-4, 5);
+
+  snake.forEach((seg,i) => {
+    ctx.fillStyle = i === 0 ? '#86efac' : getComputedStyle(document.documentElement).getPropertyValue('--snake');
+    roundRect(seg.x*cell+1, seg.y*cell+1, cell-2, cell-2, 4);
+  });
+}
+
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function step(){
+  if(gameOver) return;
+  dir = nextDir;
+  const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
+
+  if(head.x < 0 || head.x >= cols || head.y < 0 || head.y >= rows || snake.some(s => s.x===head.x && s.y===head.y)){
+    endGame();
+    return;
+  }
+
+  snake.unshift(head);
+
+  if(head.x === food.x && head.y === food.y){
+    score++;
+    scoreEl.textContent = score;
+    placeFood();
+  } else {
+    snake.pop();
+  }
+
+  draw();
+}
+
+function endGame(){
+  gameOver = true;
+  running = false;
+  clearInterval(loopId);
+  if(score > best){
+    best = score;
+    localStorage.setItem('snakeBest', best);
+    bestEl.textContent = best;
+  }
+  msgEl.textContent = "O'yin tugadi — ochko: " + score;
+  restartBtn.style.display = 'inline-block';
+}
+
+function setDir(x,y){
+  if(gameOver) return;
+  if(dir.x === -x && dir.y === -y) return; // teskari yo'nalishga o'tishni bloklaydi
+  nextDir = {x,y};
+  if(!running) start();
+}
+
+function start(){
+  if(running) return;
+  running = true;
+  msgEl.textContent = "";
+  loopId = setInterval(step, 110);
+}
+
+document.addEventListener('keydown', e => {
+  switch(e.key){
+    case 'ArrowUp': setDir(0,-1); break;
+    case 'ArrowDown': setDir(0,1); break;
+    case 'ArrowLeft': setDir(-1,0); break;
+    case 'ArrowRight': setDir(1,0); break;
+  }
+});
+
+document.getElementById('up').onclick = () => setDir(0,-1);
+document.getElementById('down').onclick = () => setDir(0,1);
+document.getElementById('left').onclick = () => setDir(-1,0);
+document.getElementById('right').onclick = () => setDir(1,0);
+
+restartBtn.onclick = () => {
+  clearInterval(loopId);
+  init();
+};
+
+init();
+</script>
+
+</body>
+</html>
